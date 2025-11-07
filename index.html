@@ -1,0 +1,1184 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Capcut Task Manager</title>
+    <!-- Memuat Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Memuat Library Ikon (Lucide) -->
+    <script src="https://unpkg.com/lucide@0.395.0/dist/umd/lucide.min.js"></script>
+    <style>
+        /* Menggunakan font Inter yang modern */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        /* Style untuk cell yang bisa disalin */
+        .copyable {
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        }
+        
+        .copyable:hover {
+            background-color: #dbeafe;
+            transform: scale(1.02);
+        }
+        
+        .copyable:active {
+            background-color: #bfdbfe;
+            transform: scale(0.98);
+        }
+        
+        /* Style untuk email yang sudah disalin */
+        .copied {
+            background-color: #86efac !important;
+            border-color: #22c55e !important;
+        }
+        
+        .copied::after {
+            content: "✓";
+            position: absolute;
+            right: 4px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #15803d;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        
+        /* Animasi untuk notifikasi */
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        .notification-show {
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        /* Style untuk input error */
+        .input-error {
+            border-color: #ef4444 !important;
+            animation: shake 0.3s;
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+        
+        /* Page transitions */
+        .page {
+            display: none;
+            animation: fadeIn 0.3s ease-in;
+        }
+        
+        .page.active {
+            display: block;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        /* Card grid */
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 1.5rem;
+        }
+        
+        @media (max-width: 640px) {
+            .card-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Copy flash effect */
+        @keyframes copyFlash {
+            0% { background-color: #3b82f6; }
+            100% { background-color: transparent; }
+        }
+        
+        .copy-flash {
+            animation: copyFlash 0.5s ease-out;
+        }
+
+        /* Task completed style */
+        .task-completed {
+            opacity: 0.6;
+            position: relative;
+        }
+
+        .task-completed::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: repeating-linear-gradient(
+                45deg,
+                transparent,
+                transparent 10px,
+                rgba(34, 197, 94, 0.1) 10px,
+                rgba(34, 197, 94, 0.1) 20px
+            );
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        /* Editable title */
+        .editable-title {
+            cursor: text;
+            padding: 2px 4px;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        .editable-title:hover {
+            background-color: #f3f4f6;
+        }
+
+        .editable-title:focus {
+            outline: 2px solid #3b82f6;
+            background-color: white;
+        }
+
+        /* Delete animation */
+        @keyframes slideOut {
+            from {
+                opacity: 1;
+                transform: scale(1);
+            }
+            to {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+        }
+        
+        .deleting {
+            animation: slideOut 0.3s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-gray-100 to-gray-200 min-h-screen">
+
+    <!-- ============================================ -->
+    <!-- NAVIGATION BAR -->
+    <!-- ============================================ -->
+    <nav class="bg-white shadow-lg sticky top-0 z-50">
+        <div class="container mx-auto px-4">
+            <div class="flex items-center justify-between h-16">
+                <!-- Logo -->
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
+                        <i data-lucide="check-square" class="w-6 h-6 text-white"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-lg font-bold text-gray-800">Capcut Task Manager</h1>
+                        <p class="text-xs text-gray-500">Admin Panel v4.0</p>
+                    </div>
+                </div>
+                
+                <!-- Navigation Links -->
+                <div class="flex items-center gap-2">
+                    <button id="nav-dashboard" class="nav-btn px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-2 bg-blue-50 text-blue-700">
+                        <i data-lucide="home" class="w-4 h-4"></i>
+                        <span class="hidden sm:inline">Dashboard</span>
+                    </button>
+                    <button id="nav-admin" class="nav-btn px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-2 text-gray-600 hover:bg-gray-100">
+                        <i data-lucide="settings" class="w-4 h-4"></i>
+                        <span class="hidden sm:inline">Admin</span>
+                    </button>
+                    <button id="clear-copied-btn" class="px-3 py-2 rounded-lg font-medium transition-all flex items-center gap-2 text-gray-600 hover:bg-gray-100" title="Clear status copied">
+                        <i data-lucide="refresh-ccw" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- ============================================ -->
+    <!-- PAGE: DASHBOARD (Beranda dengan Tasks) -->
+    <!-- ============================================ -->
+    <div id="page-dashboard" class="page active">
+        <div class="container mx-auto px-4 py-6">
+            <!-- Header -->
+            <div class="mb-6">
+                <h2 class="text-2xl font-bold text-gray-800 mb-2">Dashboard Task Capcut</h2>
+                <p class="text-gray-600">
+                    Total: <span id="total-cards" class="font-semibold">0</span> task • 
+                    <span id="total-accounts" class="font-semibold">0</span> akun •
+                    <span id="completed-tasks" class="font-semibold text-green-600">0</span> selesai
+                </p>
+            </div>
+            
+            <!-- Tasks Container -->
+            <div id="cards-container" class="card-grid">
+                <!-- Tasks akan di-generate oleh JavaScript -->
+            </div>
+            
+            <!-- Empty State -->
+            <div id="empty-state" class="text-center py-20 hidden">
+                <div class="inline-block p-8 bg-white rounded-2xl shadow-lg">
+                    <i data-lucide="inbox" class="w-20 h-20 text-gray-300 mx-auto mb-4"></i>
+                    <h3 class="text-xl font-bold text-gray-800 mb-2">Belum Ada Task</h3>
+                    <p class="text-gray-600 mb-4">Silakan tambahkan akun di Admin Panel</p>
+                    <button id="goto-admin" class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-medium flex items-center gap-2 mx-auto">
+                        <i data-lucide="plus" class="w-5 h-5"></i>
+                        Pergi ke Admin Panel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- PAGE: ADMIN PANEL -->
+    <!-- ============================================ -->
+    <div id="page-admin" class="page">
+        <div class="container mx-auto px-4 py-6 max-w-4xl">
+            <!-- Header -->
+            <div class="mb-6">
+                <h2 class="text-2xl font-bold text-gray-800 mb-2">Admin Panel</h2>
+                <p class="text-gray-600">Kelola daftar akun Capcut</p>
+            </div>
+            
+            <!-- Admin Card -->
+            <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
+                <!-- Section 1: Password Info -->
+                <div class="p-6 border-b border-gray-200 bg-blue-50">
+                    <div class="flex items-start gap-3">
+                        <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <i data-lucide="key" class="w-5 h-5 text-white"></i>
+                        </div>
+                        <div class="flex-1">
+                            <h3 class="text-lg font-bold text-gray-800 mb-1">Password Global</h3>
+                            <p class="text-sm text-gray-600 mb-3">Semua akun menggunakan password yang sama</p>
+                            <div class="bg-white border-2 border-blue-300 rounded-lg px-4 py-3 font-mono text-lg font-bold text-blue-700 flex items-center justify-between">
+                                <span>masuk123</span>
+                                <button id="copy-password-btn" class="text-blue-600 hover:text-blue-800 transition-colors" title="Copy password">
+                                    <i data-lucide="copy" class="w-5 h-5"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Section 2: Input Accounts -->
+                <div class="p-6 border-b border-gray-200">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h3 class="text-lg font-bold text-gray-800">Daftar Email Akun</h3>
+                            <p class="text-sm text-gray-600">Masukkan satu email per baris</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-2xl font-bold text-blue-600" id="email-count">0</p>
+                            <p class="text-xs text-gray-500">Total Email</p>
+                        </div>
+                    </div>
+                    
+                    <textarea 
+                        id="email-list-input" 
+                        placeholder="contoh1@gmail.com&#10;contoh2@gmail.com&#10;contoh3@gmail.com&#10;..."
+                        class="w-full h-64 px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition-all font-mono text-sm resize-none"
+                    ></textarea>
+                    
+                    <div class="mt-3 flex items-center justify-between text-sm text-gray-600">
+                        <span>💡 Tips: Setiap 5 email = 1 task</span>
+                        <span>Task yang akan dibuat: <span id="cards-preview" class="font-bold text-blue-600">0</span></span>
+                    </div>
+                </div>
+                
+                <!-- Section 3: Actions -->
+                <div class="p-6 bg-gray-50">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <button id="save-accounts-btn" class="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all font-semibold flex items-center justify-center gap-2">
+                            <i data-lucide="save" class="w-5 h-5"></i>
+                            Simpan Data
+                        </button>
+                        <button id="clear-accounts-btn" class="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all font-semibold flex items-center justify-center gap-2">
+                            <i data-lucide="trash-2" class="w-5 h-5"></i>
+                            Hapus Semua
+                        </button>
+                        <button id="import-sample-btn" class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-semibold flex items-center justify-center gap-2">
+                            <i data-lucide="download" class="w-5 h-5"></i>
+                            Sample Data
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Section 4: Statistics -->
+                <div class="p-6 border-t border-gray-200">
+                    <h3 class="text-sm font-bold text-gray-700 mb-3">Statistik Saat Ini</h3>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        <div class="text-center p-3 bg-blue-50 rounded-lg">
+                            <p class="text-2xl font-bold text-blue-600" id="stat-total-accounts">0</p>
+                            <p class="text-xs text-gray-600">Total Akun</p>
+                        </div>
+                        <div class="text-center p-3 bg-green-50 rounded-lg">
+                            <p class="text-2xl font-bold text-green-600" id="stat-total-cards">0</p>
+                            <p class="text-xs text-gray-600">Total Task</p>
+                        </div>
+                        <div class="text-center p-3 bg-yellow-50 rounded-lg">
+                            <p class="text-2xl font-bold text-yellow-600" id="stat-copied">0</p>
+                            <p class="text-xs text-gray-600">Sudah Disalin</p>
+                        </div>
+                        <div class="text-center p-3 bg-purple-50 rounded-lg">
+                            <p class="text-2xl font-bold text-purple-600" id="stat-remaining">0</p>
+                            <p class="text-xs text-gray-600">Belum Disalin</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- NOTIFICATION TOAST -->
+    <!-- ============================================ -->
+    <div id="notification" class="fixed bottom-5 right-5 px-4 py-3 rounded-lg shadow-2xl transition-all duration-300 opacity-0 transform translate-x-full flex items-center gap-2 z-50">
+        <i id="notification-icon" data-lucide="check-circle" class="w-5 h-5"></i>
+        <span id="notification-text" class="font-medium">Notifikasi</span>
+    </div>
+
+    <!-- Hidden textarea for fallback copy -->
+    <textarea id="fallback-copy-textarea" style="position: absolute; left: -9999px; top: 0; opacity: 0;" aria-hidden="true"></textarea>
+
+    <!-- ============================================ -->
+    <!-- JAVASCRIPT -->
+    <!-- ============================================ -->
+    <script>
+        // ================================================
+        // KONSTANTA & VARIABEL GLOBAL
+        // ================================================
+        
+        const STORAGE_KEYS = {
+            TASKS: 'capcut-tasks',
+            COPIED_STATUS: 'copied-status',
+            PASSWORD: 'global-password'
+        };
+        
+        const GLOBAL_PASSWORD = 'masuk123';
+        const ACCOUNTS_PER_TASK = 5;
+        
+        // Timer duration options (dalam detik)
+        const TIMER_OPTIONS = [
+            { label: '5 menit', value: 5 * 60 },
+            { label: '10 menit', value: 10 * 60 },
+            { label: '15 menit', value: 15 * 60 },
+            { label: '20 menit', value: 20 * 60 },
+            { label: '30 menit', value: 30 * 60 },
+            { label: '45 menit', value: 45 * 60 },
+            { label: '60 menit', value: 60 * 60 },
+            { label: '90 menit', value: 90 * 60 },
+            { label: '120 menit', value: 120 * 60 }
+        ];
+        
+        const DEFAULT_TIMER_DURATION = 60 * 60; // 60 menit
+        
+        let allTasks = [];
+        let copiedEmails = new Set();
+        
+        // ================================================
+        // INISIALISASI
+        // ================================================
+        
+        lucide.createIcons();
+        
+        // ================================================
+        // FUNGSI NOTIFIKASI
+        // ================================================
+        
+        function showNotification(message, type = 'success') {
+            const notification = document.getElementById('notification');
+            const notificationText = document.getElementById('notification-text');
+            const notificationIcon = document.getElementById('notification-icon');
+            
+            const styles = {
+                success: { bg: 'bg-green-600', icon: 'check-circle' },
+                error: { bg: 'bg-red-600', icon: 'alert-circle' },
+                warning: { bg: 'bg-yellow-600', icon: 'alert-triangle' },
+                info: { bg: 'bg-blue-600', icon: 'info' }
+            };
+            
+            const style = styles[type] || styles.success;
+            
+            notification.className = `fixed bottom-5 right-5 px-4 py-3 rounded-lg shadow-2xl flex items-center gap-2 z-50 text-white ${style.bg}`;
+            notificationText.textContent = message;
+            notificationIcon.setAttribute('data-lucide', style.icon);
+            lucide.createIcons();
+            
+            notification.classList.remove('opacity-0', 'translate-x-full');
+            notification.classList.add('notification-show', 'opacity-100', 'translate-x-0');
+            
+            setTimeout(() => {
+                notification.classList.add('opacity-0', 'translate-x-full');
+                notification.classList.remove('translate-x-0');
+            }, 3000);
+        }
+        
+        // ================================================
+        // FUNGSI COPY TO CLIPBOARD
+        // ================================================
+        
+        function copyToClipboard(text, element = null) {
+            const textarea = document.getElementById('fallback-copy-textarea');
+            textarea.value = text;
+            textarea.style.display = 'block';
+            textarea.select();
+            textarea.setSelectionRange(0, 99999);
+            
+            let success = false;
+            
+            try {
+                success = document.execCommand('copy');
+                
+                if (success) {
+                    const displayText = text.length > 30 ? text.substring(0, 30) + '...' : text;
+                    showNotification(`✓ Disalin: ${displayText}`, 'success');
+                    
+                    if (element) {
+                        element.classList.add('copy-flash');
+                        setTimeout(() => {
+                            element.classList.remove('copy-flash');
+                        }, 500);
+                    }
+                    
+                    return true;
+                }
+            } catch (err) {
+                console.error('execCommand gagal:', err);
+            }
+            
+            if (!success && navigator.clipboard) {
+                navigator.clipboard.writeText(text)
+                    .then(() => {
+                        const displayText = text.length > 30 ? text.substring(0, 30) + '...' : text;
+                        showNotification(`✓ Disalin: ${displayText}`, 'success');
+                        
+                        if (element) {
+                            element.classList.add('copy-flash');
+                            setTimeout(() => {
+                                element.classList.remove('copy-flash');
+                            }, 500);
+                        }
+                        
+                        return true;
+                    })
+                    .catch(err => {
+                        console.error('Clipboard API gagal:', err);
+                        showNotification('❌ Gagal menyalin!', 'error');
+                        return false;
+                    });
+            }
+            
+            textarea.style.display = 'none';
+            textarea.blur();
+            
+            if (!success) {
+                showNotification('❌ Gagal menyalin ke clipboard!', 'error');
+            }
+            
+            return success;
+        }
+        
+        // ================================================
+        // FUNGSI LOAD & SAVE DATA
+        // ================================================
+        
+        function loadTasksFromStorage() {
+            const saved = localStorage.getItem(STORAGE_KEYS.TASKS);
+            if (saved) {
+                try {
+                    allTasks = JSON.parse(saved);
+                } catch (e) {
+                    console.error('Error parsing tasks:', e);
+                    allTasks = [];
+                }
+            }
+            
+            const copiedSaved = localStorage.getItem(STORAGE_KEYS.COPIED_STATUS);
+            if (copiedSaved) {
+                try {
+                    copiedEmails = new Set(JSON.parse(copiedSaved));
+                } catch (e) {
+                    copiedEmails = new Set();
+                }
+            }
+        }
+        
+        function saveTasksToStorage() {
+            localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(allTasks));
+            localStorage.setItem(STORAGE_KEYS.COPIED_STATUS, JSON.stringify([...copiedEmails]));
+        }
+
+        // ================================================
+        // FUNGSI DELETE TASK
+        // ================================================
+
+        function deleteTask(taskId) {
+            const task = allTasks.find(t => t.id === taskId);
+            
+            if (!task) {
+                showNotification('❌ Task tidak ditemukan!', 'error');
+                return;
+            }
+
+            if (!confirm(`Yakin ingin menghapus "${task.title}"?`)) {
+                return;
+            }
+
+            const cardElement = document.querySelector(`[data-task-id="${taskId}"]`);
+            
+            if (cardElement) {
+                cardElement.classList.add('deleting');
+                
+                setTimeout(() => {
+                    allTasks = allTasks.filter(t => t.id !== taskId);
+                    saveTasksToStorage();
+                    renderTasks();
+                    updateStats();
+                    showNotification('🗑️ Task berhasil dihapus!', 'info');
+                }, 300);
+            } else {
+                allTasks = allTasks.filter(t => t.id !== taskId);
+                saveTasksToStorage();
+                renderTasks();
+                updateStats();
+                showNotification('🗑️ Task berhasil dihapus!', 'info');
+            }
+        }
+
+        // ================================================
+        // FUNGSI TOGGLE COMPLETE TASK
+        // ================================================
+
+        function toggleCompleteTask(taskId) {
+            const task = allTasks.find(t => t.id === taskId);
+            
+            if (!task) {
+                showNotification('❌ Task tidak ditemukan!', 'error');
+                return;
+            }
+
+            task.completed = !task.completed;
+            saveTasksToStorage();
+            renderTasks();
+            updateStats();
+            
+            if (task.completed) {
+                showNotification('✓ Task ditandai selesai!', 'success');
+            } else {
+                showNotification('↺ Task ditandai belum selesai', 'info');
+            }
+        }
+
+        // ================================================
+        // FUNGSI UPDATE TITLE
+        // ================================================
+
+        function updateTaskTitle(taskId, newTitle) {
+            const task = allTasks.find(t => t.id === taskId);
+            
+            if (!task) {
+                return;
+            }
+
+            if (newTitle && newTitle.trim() !== '' && newTitle !== task.title) {
+                task.title = newTitle.trim();
+                saveTasksToStorage();
+                showNotification('✓ Judul task diperbarui', 'success');
+            }
+        }
+        
+        // ================================================
+        // FUNGSI RENDER TASKS
+        // ================================================
+        
+        function renderTasks() {
+            const container = document.getElementById('cards-container');
+            const emptyState = document.getElementById('empty-state');
+            
+            container.innerHTML = '';
+            
+            if (allTasks.length === 0) {
+                emptyState.classList.remove('hidden');
+                container.classList.add('hidden');
+                updateHeaderStats();
+                return;
+            }
+            
+            emptyState.classList.add('hidden');
+            container.classList.remove('hidden');
+            
+            allTasks.forEach((task) => {
+                const taskCard = createTaskCard(task);
+                container.appendChild(taskCard);
+            });
+            
+            updateHeaderStats();
+            lucide.createIcons();
+        }
+        
+        function createTaskCard(task) {
+            const cardDiv = document.createElement('div');
+            const completedClass = task.completed ? 'task-completed' : '';
+            cardDiv.className = `bg-white rounded-2xl shadow-xl overflow-hidden hover:shadow-2xl transition-shadow ${completedClass}`;
+            cardDiv.setAttribute('data-task-id', task.id);
+            
+            // Generate timer duration options
+            const timerOptionsHTML = TIMER_OPTIONS.map(opt => {
+                const selected = task.timerMaxDuration === opt.value ? 'selected' : '';
+                return `<option value="${opt.value}" ${selected}>${opt.label}</option>`;
+            }).join('');
+            
+            // Header Card
+            const header = `
+                <div class="p-3 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50 relative">
+                    <!-- Delete & Complete Buttons -->
+                    <div class="absolute top-2 right-2 flex gap-1 z-10">
+                        <button class="complete-task-btn p-1.5 rounded-lg ${task.completed ? 'bg-green-600 text-white' : 'bg-white text-gray-600 hover:bg-green-50'} transition-all shadow-sm" title="${task.completed ? 'Tandai belum selesai' : 'Tandai selesai'}">
+                            <i data-lucide="check" class="w-4 h-4"></i>
+                        </button>
+                        <button class="delete-task-btn p-1.5 bg-white text-red-600 hover:bg-red-50 rounded-lg transition-all shadow-sm" title="Hapus task">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+
+                    <div class="flex items-center gap-2 mb-2 pr-20">
+                        <h2 class="editable-title text-lg font-bold text-gray-800 flex-1" contenteditable="true">${task.title}</h2>
+                        <i data-lucide="edit-3" class="w-4 h-4 text-gray-400"></i>
+                    </div>
+                    
+                    <div class="space-y-2">
+                        <!-- Form Akun Capcut -->
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">
+                                Akun Capcut <span class="text-red-500">*</span>
+                            </label>
+                            <input 
+                                type="text" 
+                                class="capcut-input w-full px-2 py-1 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                placeholder="email@gmail.com | masuk123"
+                                value="${task.capcutAccount || ''}"
+                            >
+                        </div>
+                        
+                        <!-- Form Link -->
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">
+                                Link <span class="text-red-500">*</span>
+                            </label>
+                            <input 
+                                type="url" 
+                                class="link-input w-full px-2 py-1 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                placeholder="https://www.link-anda.com"
+                                value="${task.link || ''}"
+                            >
+                        </div>
+                        
+                        <!-- Timer Section with Duration Selector -->
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">
+                                Timer & Durasi Task
+                            </label>
+                            <div class="flex items-center gap-2">
+                                <!-- Timer Display & Controls -->
+                                <div class="flex items-center gap-2 flex-1">
+                                    <span class="timer-display text-xl font-bold text-gray-800 font-mono select-none">${task.timerDisplay || '60:00'}</span>
+                                    <button class="timer-start-btn text-green-600 hover:text-green-700" title="Mulai Timer">
+                                        <i data-lucide="play-circle" class="w-5 h-5"></i>
+                                    </button>
+                                    <button class="timer-reset-btn text-gray-500 hover:text-gray-700" title="Reset Timer">
+                                        <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                                    </button>
+                                </div>
+                                
+                                <!-- Timer Duration Selector -->
+                                <select class="timer-duration-select bg-gray-50 border border-gray-300 text-gray-900 text-xs rounded-lg px-2 py-1 cursor-pointer">
+                                    ${timerOptionsHTML}
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <!-- Durasi Capcut -->
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">
+                                Durasi Capcut
+                            </label>
+                            <select class="duration-select bg-gray-50 border border-gray-300 text-gray-900 text-xs rounded-lg px-2 py-1 cursor-pointer w-full">
+                                <option value="">Pilih Durasi</option>
+                                <option value="7D" ${task.duration === '7D' ? 'selected' : ''}>7 Hari</option>
+                                <option value="14D" ${task.duration === '14D' ? 'selected' : ''}>14 Hari</option>
+                                <option value="21D" ${task.duration === '21D' ? 'selected' : ''}>21 Hari</option>
+                                <option value="28D" ${task.duration === '28D' ? 'selected' : ''}>28 Hari</option>
+                                <option value="35D" ${task.duration === '35D' ? 'selected' : ''}>35 Hari</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Tombol Salin -->
+                        <button class="copy-main-btn w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold py-2 px-3 rounded-lg flex items-center justify-center gap-2 hover:from-blue-700 hover:to-indigo-700">
+                            <i data-lucide="copy" class="w-4 h-4"></i>
+                            <span class="text-sm">Salin Info Capcut</span>
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            // Body Card (Daftar Akun)
+            let accountsHTML = task.accounts.map((email, idx) => {
+                const isCopied = copiedEmails.has(email);
+                const copiedClass = isCopied ? 'copied' : '';
+                
+                return `
+                    <div class="flex gap-1">
+                        <div 
+                            class="copyable email-cell ${copiedClass} flex-1 px-2 py-1 rounded-md bg-white border border-gray-200 hover:border-blue-300 truncate text-xs" 
+                            title="Klik untuk menyalin email"
+                            data-email="${email}"
+                        >${email}</div>
+                        <div 
+                            class="copyable pass-cell flex-1 px-2 py-1 rounded-md bg-white border border-gray-200 hover:border-blue-300 truncate text-xs" 
+                            title="Klik untuk menyalin password"
+                            data-password="${GLOBAL_PASSWORD}"
+                        >${GLOBAL_PASSWORD}</div>
+                    </div>
+                `;
+            }).join('');
+            
+            const body = `
+                <div class="p-3 bg-gray-50">
+                    <h3 class="text-sm font-semibold text-gray-700 mb-2">Daftar Akun (${task.accounts.length})</h3>
+                    <div class="space-y-1 font-mono">
+                        ${accountsHTML}
+                    </div>
+                </div>
+            `;
+            
+            cardDiv.innerHTML = header + body;
+            
+            setupTaskEventListeners(cardDiv, task.id);
+            
+            return cardDiv;
+        }
+        
+        // ================================================
+        // SETUP EVENT LISTENERS UNTUK TASK
+        // ================================================
+        
+        function setupTaskEventListeners(cardElement, taskId) {
+            const task = allTasks.find(t => t.id === taskId);
+            
+            if (!task) {
+                console.error('Task not found:', taskId);
+                return;
+            }
+
+            // Delete Task Button
+            const deleteBtn = cardElement.querySelector('.delete-task-btn');
+            deleteBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                deleteTask(taskId);
+            });
+
+            // Complete Task Button
+            const completeBtn = cardElement.querySelector('.complete-task-btn');
+            completeBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleCompleteTask(taskId);
+            });
+
+            // Editable Title
+            const titleElement = cardElement.querySelector('.editable-title');
+            titleElement.addEventListener('blur', () => {
+                const newTitle = titleElement.textContent.trim();
+                updateTaskTitle(taskId, newTitle);
+            });
+
+            titleElement.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    titleElement.blur();
+                }
+            });
+
+            // Auto-save input changes
+            const capcutInput = cardElement.querySelector('.capcut-input');
+            const linkInput = cardElement.querySelector('.link-input');
+            const durationSelect = cardElement.querySelector('.duration-select');
+            const timerDurationSelect = cardElement.querySelector('.timer-duration-select');
+
+            capcutInput.addEventListener('change', () => {
+                task.capcutAccount = capcutInput.value;
+                saveTasksToStorage();
+            });
+
+            linkInput.addEventListener('change', () => {
+                task.link = linkInput.value;
+                saveTasksToStorage();
+            });
+
+            durationSelect.addEventListener('change', () => {
+                task.duration = durationSelect.value;
+                saveTasksToStorage();
+            });
+
+            // Timer Duration Change Handler
+            timerDurationSelect.addEventListener('change', () => {
+                const newDuration = parseInt(timerDurationSelect.value);
+                task.timerMaxDuration = newDuration;
+                task.timeRemaining = newDuration;
+                task.timerDisplay = formatTime(newDuration);
+                
+                // Update display
+                const timerDisplay = cardElement.querySelector('.timer-display');
+                timerDisplay.textContent = formatTime(newDuration);
+                
+                saveTasksToStorage();
+                showNotification(`⏱️ Durasi timer diubah menjadi ${Math.floor(newDuration / 60)} menit`, 'info');
+            });
+            
+            // Timer
+            let timerInterval = null;
+            let timeRemaining = task.timeRemaining || task.timerMaxDuration || DEFAULT_TIMER_DURATION;
+            
+            const timerDisplay = cardElement.querySelector('.timer-display');
+            const timerStartBtn = cardElement.querySelector('.timer-start-btn');
+            const timerResetBtn = cardElement.querySelector('.timer-reset-btn');
+            
+            function formatTime(seconds) {
+                const mins = Math.floor(seconds / 60);
+                const secs = seconds % 60;
+                return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            }
+            
+            timerStartBtn.addEventListener('click', () => {
+                if (timerInterval) {
+                    clearInterval(timerInterval);
+                    timerInterval = null;
+                    timerStartBtn.innerHTML = '<i data-lucide="play-circle" class="w-5 h-5"></i>';
+                    timerStartBtn.classList.remove('text-red-600');
+                    timerStartBtn.classList.add('text-green-600');
+                } else {
+                    timerInterval = setInterval(() => {
+                        if (timeRemaining <= 0) {
+                            clearInterval(timerInterval);
+                            timerInterval = null;
+                            timerStartBtn.innerHTML = '<i data-lucide="play-circle" class="w-5 h-5"></i>';
+                            showNotification(`⏰ Timer "${task.title}" selesai!`, 'info');
+                            return;
+                        }
+                        timeRemaining--;
+                        timerDisplay.textContent = formatTime(timeRemaining);
+                        task.timeRemaining = timeRemaining;
+                        task.timerDisplay = formatTime(timeRemaining);
+                    }, 1000);
+                    
+                    timerStartBtn.innerHTML = '<i data-lucide="pause-circle" class="w-5 h-5"></i>';
+                    timerStartBtn.classList.remove('text-green-600');
+                    timerStartBtn.classList.add('text-red-600');
+                }
+                lucide.createIcons();
+            });
+            
+            timerResetBtn.addEventListener('click', () => {
+                if (timerInterval) {
+                    clearInterval(timerInterval);
+                    timerInterval = null;
+                }
+                
+                // Reset ke durasi yang dipilih
+                const maxDuration = task.timerMaxDuration || DEFAULT_TIMER_DURATION;
+                timeRemaining = maxDuration;
+                timerDisplay.textContent = formatTime(timeRemaining);
+                timerStartBtn.innerHTML = '<i data-lucide="play-circle" class="w-5 h-5"></i>';
+                timerStartBtn.classList.remove('text-red-600');
+                timerStartBtn.classList.add('text-green-600');
+                task.timeRemaining = timeRemaining;
+                task.timerDisplay = formatTime(timeRemaining);
+                saveTasksToStorage();
+                lucide.createIcons();
+            });
+            
+            // Copy Main Button
+            const copyMainBtn = cardElement.querySelector('.copy-main-btn');
+            copyMainBtn.addEventListener('click', () => {
+                if (!capcutInput.value.trim() || !linkInput.value.trim()) {
+                    showNotification('⚠️ Mohon isi Capcut & Link!', 'warning');
+                    return;
+                }
+
+                if (!durationSelect.value) {
+                    showNotification('⚠️ Mohon pilih durasi Capcut!', 'warning');
+                    return;
+                }
+                
+                const text = `Capcut ${durationSelect.value}\nEmail : ${capcutInput.value}\nLink : ${linkInput.value}`;
+                copyToClipboard(text, copyMainBtn);
+            });
+            
+            // Copy Email Cells
+            const emailCells = cardElement.querySelectorAll('.email-cell');
+            emailCells.forEach(cell => {
+                cell.addEventListener('click', () => {
+                    const email = cell.getAttribute('data-email');
+                    const success = copyToClipboard(email, cell);
+                    
+                    if (success) {
+                        copiedEmails.add(email);
+                        cell.classList.add('copied');
+                        saveTasksToStorage();
+                        updateStats();
+                    }
+                });
+            });
+            
+            // Copy Password Cells
+            const passCells = cardElement.querySelectorAll('.pass-cell');
+            passCells.forEach(cell => {
+                cell.addEventListener('click', () => {
+                    const password = cell.getAttribute('data-password');
+                    copyToClipboard(password, cell);
+                });
+            });
+        }
+        
+        // ================================================
+        // UPDATE STATISTICS
+        // ================================================
+        
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function updateHeaderStats() {
+            const totalTasks = allTasks.length;
+            const totalAccounts = allTasks.reduce((sum, task) => sum + task.accounts.length, 0);
+            const completedTasks = allTasks.filter(task => task.completed).length;
+            
+            document.getElementById('total-cards').textContent = totalTasks;
+            document.getElementById('total-accounts').textContent = totalAccounts;
+            document.getElementById('completed-tasks').textContent = completedTasks;
+        }
+        
+        function updateStats() {
+            const totalAccounts = allTasks.reduce((sum, task) => sum + task.accounts.length, 0);
+            const totalTasks = allTasks.length;
+            const copiedCount = copiedEmails.size;
+            const remainingCount = totalAccounts - copiedCount;
+            
+            document.getElementById('stat-total-accounts').textContent = totalAccounts;
+            document.getElementById('stat-total-cards').textContent = totalTasks;
+            document.getElementById('stat-copied').textContent = copiedCount;
+            document.getElementById('stat-remaining').textContent = remainingCount;
+        }
+        
+        // ================================================
+        // ADMIN PANEL FUNCTIONS
+        // ================================================
+        
+        function updateEmailCount() {
+            const textarea = document.getElementById('email-list-input');
+            const emails = textarea.value.split('\n').filter(e => e.trim() !== '');
+            const count = emails.length;
+            const tasks = Math.ceil(count / ACCOUNTS_PER_TASK);
+            
+            document.getElementById('email-count').textContent = count;
+            document.getElementById('cards-preview').textContent = tasks;
+        }
+        
+        function saveAccounts() {
+            const textarea = document.getElementById('email-list-input');
+            const emails = textarea.value.split('\n')
+                .map(e => e.trim())
+                .filter(e => e !== '' && e.includes('@'));
+            
+            if (emails.length === 0) {
+                showNotification('⚠️ Tidak ada email valid untuk disimpan!', 'warning');
+                return;
+            }
+
+            const newTasks = [];
+            for (let i = 0; i < emails.length; i += ACCOUNTS_PER_TASK) {
+                const taskAccounts = emails.slice(i, i + ACCOUNTS_PER_TASK);
+                const taskNumber = allTasks.length + newTasks.length + 1;
+                
+                newTasks.push({
+                    id: Date.now() + i,
+                    title: `Task #${taskNumber}`,
+                    accounts: taskAccounts,
+                    capcutAccount: '',
+                    link: '',
+                    duration: '',
+                    timerMaxDuration: DEFAULT_TIMER_DURATION,
+                    timeRemaining: DEFAULT_TIMER_DURATION,
+                    timerDisplay: formatTime(DEFAULT_TIMER_DURATION),
+                    completed: false
+                });
+            }
+            
+            allTasks = [...allTasks, ...newTasks];
+            saveTasksToStorage();
+            renderTasks();
+            updateStats();
+            
+            showNotification(`✓ Berhasil membuat ${newTasks.length} task baru!`, 'success');
+            
+            textarea.value = '';
+            updateEmailCount();
+            
+            switchPage('dashboard');
+        }
+        
+        function clearAllAccounts() {
+            if (!confirm('⚠️ Yakin ingin menghapus SEMUA task? Tindakan ini tidak dapat dibatalkan!')) {
+                return;
+            }
+            
+            allTasks = [];
+            copiedEmails.clear();
+            saveTasksToStorage();
+            renderTasks();
+            updateStats();
+            
+            document.getElementById('email-list-input').value = '';
+            updateEmailCount();
+            
+            showNotification('🗑️ Semua task berhasil dihapus!', 'info');
+        }
+        
+        function loadSampleData() {
+            const sampleEmails = [
+                'capcut1@gmail.com',
+                'capcut2@gmail.com',
+                'capcut3@gmail.com',
+                'capcut4@gmail.com',
+                'capcut5@gmail.com',
+                'capcut6@gmail.com',
+                'capcut7@gmail.com',
+                'capcut8@gmail.com',
+                'capcut9@gmail.com',
+                'capcut10@gmail.com',
+                'capcut11@gmail.com',
+                'capcut12@gmail.com',
+                'capcut13@gmail.com',
+                'capcut14@gmail.com',
+                'capcut15@gmail.com'
+            ];
+            
+            document.getElementById('email-list-input').value = sampleEmails.join('\n');
+            updateEmailCount();
+            showNotification('📥 Sample data berhasil dimuat (15 email)', 'info');
+        }
+        
+        function loadAccountsToAdmin() {
+            updateStats();
+        }
+        
+        // ================================================
+        // NAVIGATION
+        // ================================================
+        
+        function switchPage(pageName) {
+            document.querySelectorAll('.page').forEach(page => {
+                page.classList.remove('active');
+            });
+            
+            document.getElementById(`page-${pageName}`).classList.add('active');
+            
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('bg-blue-50', 'text-blue-700');
+                btn.classList.add('text-gray-600', 'hover:bg-gray-100');
+            });
+            
+            document.getElementById(`nav-${pageName}`).classList.remove('text-gray-600', 'hover:bg-gray-100');
+            document.getElementById(`nav-${pageName}`).classList.add('bg-blue-50', 'text-blue-700');
+            
+            if (pageName === 'admin') {
+                loadAccountsToAdmin();
+            }
+        }
+        
+        // ================================================
+        // EVENT LISTENERS - NAVIGATION
+        // ================================================
+        
+        document.getElementById('nav-dashboard').addEventListener('click', () => {
+            switchPage('dashboard');
+        });
+        
+        document.getElementById('nav-admin').addEventListener('click', () => {
+            switchPage('admin');
+        });
+        
+        document.getElementById('goto-admin').addEventListener('click', () => {
+            switchPage('admin');
+        });
+        
+        // ================================================
+        // EVENT LISTENERS - ADMIN PANEL
+        // ================================================
+        
+        document.getElementById('email-list-input').addEventListener('input', updateEmailCount);
+        document.getElementById('save-accounts-btn').addEventListener('click', saveAccounts);
+        document.getElementById('clear-accounts-btn').addEventListener('click', clearAllAccounts);
+        document.getElementById('import-sample-btn').addEventListener('click', loadSampleData);
+        
+        document.getElementById('copy-password-btn').addEventListener('click', () => {
+            copyToClipboard(GLOBAL_PASSWORD);
+        });
+        
+        document.getElementById('clear-copied-btn').addEventListener('click', () => {
+            if (copiedEmails.size === 0) {
+                showNotification('ℹ️ Tidak ada status yang perlu di-reset', 'info');
+                return;
+            }
+            
+            if (!confirm(`Reset status copied untuk ${copiedEmails.size} email?`)) {
+                return;
+            }
+            
+            copiedEmails.clear();
+            saveTasksToStorage();
+            renderTasks();
+            updateStats();
+            showNotification('🔄 Status copied berhasil di-reset!', 'success');
+        });
+        
+        // ================================================
+        // INITIALIZATION
+        // ================================================
+        
+        window.addEventListener('DOMContentLoaded', () => {
+            loadTasksFromStorage();
+            renderTasks();
+            updateStats();
+            lucide.createIcons();
+            
+            console.log('%c🚀 Capcut Task Manager v4.0', 'color: #3b82f6; font-size: 16px; font-weight: bold;');
+            console.log('%c✓ Fitur baru: Custom Timer Duration (5-120 menit)', 'color: #10b981;');
+            console.log('%cDibuat oleh: @otpcanva', 'color: #6366f1; font-style: italic;');
+        });
+        
+    </script>
+
+</body>
+</html>
