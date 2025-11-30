@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Capcut Task Manager - Aurigo Store</title>
+    <title>Capcut Manager - Shared Team</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -15,6 +15,11 @@
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         @keyframes spin { to { transform: rotate(360deg); } }
         .animate-spin-slow { animation: spin 3s linear infinite; }
+        @keyframes pulse-red {
+            0%, 100% { background-color: #fee2e2; }
+            50% { background-color: #fca5a5; }
+        }
+        .bg-alarm { animation: pulse-red 1s infinite; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800">
@@ -26,7 +31,7 @@
         import { 
             Copy, Plus, Trash2, LayoutDashboard, CheckCircle, 
             AlertTriangle, X, CheckSquare, Square, Cloud, 
-            Loader2, Eraser, Users
+            Loader2, Eraser, Users, Play, RotateCcw, Timer, BellRing
         } from 'https://esm.sh/lucide-react@0.294.0';
 
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
@@ -51,8 +56,11 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // NAMA KOLEKSI BERSAMA (Semua device baca/tulis ke sini)
+        // NAMA KOLEKSI BERSAMA
         const SHARED_COLLECTION = 'shared_capcut_tasks';
+        
+        // URL Suara Alarm (Digital Watch Beep)
+        const ALARM_SOUND_URL = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
 
         // --- COMPONENTS ---
 
@@ -97,8 +105,15 @@
                 link: task.link || "",
                 gsuit: task.gsuit || ""
             });
+            
+            // TIMER STATE
+            const [timeLeft, setTimeLeft] = useState(null); // String display (30:00)
+            const [timerStatus, setTimerStatus] = useState("idle"); // idle, running, finished
+            const audioRef = useRef(new Audio(ALARM_SOUND_URL));
+            const timerIntervalRef = useRef(null);
+            
+            // Sync local data form
             const debounceTimer = useRef(null);
-
             useEffect(() => {
                 setLocalData({
                     account: task.account || "",
@@ -107,6 +122,75 @@
                     gsuit: task.gsuit || ""
                 });
             }, [task.account, task.password, task.link, task.gsuit]);
+
+            // --- TIMER LOGIC (REAL-TIME & PERSISTENT) ---
+            useEffect(() => {
+                // Fungsi menghitung sisa waktu
+                const calculateTime = () => {
+                    if (!task.timerEnd) {
+                        setTimerStatus("idle");
+                        setTimeLeft("30:00");
+                        return;
+                    }
+
+                    const now = Date.now();
+                    const end = task.timerEnd; // Timestamp dari database
+                    const diff = end - now;
+
+                    if (diff <= 0) {
+                        setTimerStatus("finished");
+                        setTimeLeft("00:00");
+                        // Play sound jika belum pernah dimainkan di sesi ini
+                        // Note: Browser membatasi autoplay jika user belum interaksi, tapi kita coba trigger.
+                        if (audioRef.current.paused) {
+                            audioRef.current.loop = true;
+                            audioRef.current.play().catch(e => console.log("Audio autoplay blocked until interaction"));
+                        }
+                    } else {
+                        setTimerStatus("running");
+                        // Format ke MM:SS
+                        const minutes = Math.floor(diff / 60000);
+                        const seconds = Math.floor((diff % 60000) / 1000);
+                        setTimeLeft(`${minutes}:${seconds < 10 ? '0' : ''}${seconds}`);
+                    }
+                };
+
+                // Jalankan hitungan pertama kali
+                calculateTime();
+
+                // Interval tiap 1 detik
+                if (task.timerEnd) {
+                    timerIntervalRef.current = setInterval(calculateTime, 1000);
+                }
+
+                return () => {
+                    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+                    // Stop audio jika komponen di-unmount atau reset
+                    audioRef.current.pause();
+                    audioRef.current.currentTime = 0;
+                };
+            }, [task.timerEnd]);
+
+            const startTimer = () => {
+                // Set waktu target selesai = Sekarang + 30 menit
+                const DURATION_MINUTES = 30;
+                const endTime = Date.now() + (DURATION_MINUTES * 60 * 1000);
+                updateTaskDirectly(task.id, 'timerEnd', endTime);
+            };
+
+            const resetTimer = () => {
+                // Hapus timerEnd dari database
+                updateTaskDirectly(task.id, 'timerEnd', null);
+                audioRef.current.pause();
+                audioRef.current.currentTime = 0;
+            };
+
+            const stopAlarm = () => {
+                // Matikan suara tapi biarkan status finished (agar user tau tadi abis alarm)
+                audioRef.current.pause();
+                audioRef.current.currentTime = 0;
+            };
+
 
             const handleInputChange = (field, value) => {
                 setLocalData(prev => ({ ...prev, [field]: value }));
@@ -139,9 +223,11 @@
             const variants = ["7 DAY", "14 DAY", "21 DAY", "28 DAY", "35 DAY"];
 
             return (
-                <div className={`bg-white rounded-xl shadow-sm border overflow-hidden flex flex-col transition-all duration-300 hover:shadow-lg group relative ${task.isCompleted ? 'border-green-400 ring-1 ring-green-100' : 'border-slate-200 hover:border-blue-300'}`}>
+                <div className={`bg-white rounded-xl shadow-sm border overflow-hidden flex flex-col transition-all duration-300 hover:shadow-lg group relative ${timerStatus === 'finished' ? 'ring-2 ring-red-400 bg-red-50' : task.isCompleted ? 'border-green-400 ring-1 ring-green-100' : 'border-slate-200 hover:border-blue-300'}`}>
                     {task.isCompleted && <div className="absolute top-0 right-0 p-2 opacity-10 pointer-events-none"><CheckCircle size={100} className="text-green-600" /></div>}
-                    <div className={`px-4 py-3 border-b flex justify-between items-center transition-colors ${task.isCompleted ? 'bg-green-50 border-green-100' : 'bg-slate-50 border-slate-100 group-hover:bg-blue-50/50'}`}>
+                    
+                    {/* Header */}
+                    <div className={`px-4 py-3 border-b flex justify-between items-center transition-colors ${timerStatus === 'finished' ? 'bg-red-100 border-red-200' : task.isCompleted ? 'bg-green-50 border-green-100' : 'bg-slate-50 border-slate-100 group-hover:bg-blue-50/50'}`}>
                         <h3 className={`font-bold flex items-center gap-2 ${task.isCompleted ? 'text-green-700' : 'text-slate-700'}`}>
                             <span className={`text-xs font-bold px-2 py-0.5 rounded-full shadow-sm ${task.isCompleted ? 'bg-green-500 text-white' : 'bg-blue-600 text-white shadow-blue-200'}`}>#{index + 1}</span>
                             <span className="text-sm md:text-base">TASK {index + 1}</span>
@@ -151,6 +237,36 @@
                             <button onClick={() => onRequestDelete(task.id)} className="text-slate-300 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-all" title="Hapus"><Trash2 size={18} /></button>
                         </div>
                     </div>
+
+                    {/* Timer Section */}
+                    <div className={`px-5 py-3 border-b border-slate-100 flex items-center justify-between ${timerStatus === 'running' ? 'bg-blue-50/50' : timerStatus === 'finished' ? 'bg-alarm' : ''}`}>
+                        <div className="flex items-center gap-2">
+                            {timerStatus === 'finished' ? <BellRing className="text-red-600 animate-bounce" size={20} /> : <Timer className="text-slate-400" size={20} />}
+                            <span className={`font-mono text-lg font-bold ${timerStatus === 'running' ? 'text-blue-600' : timerStatus === 'finished' ? 'text-red-600' : 'text-slate-400'}`}>
+                                {timeLeft || "30:00"}
+                            </span>
+                        </div>
+                        <div className="flex gap-2">
+                            {timerStatus === 'idle' && (
+                                <button onClick={startTimer} className="flex items-center gap-1 px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-xs font-bold hover:bg-blue-200 transition-colors">
+                                    <Play size={14} fill="currentColor" /> Start 30m
+                                </button>
+                            )}
+                            {timerStatus === 'running' && (
+                                <button onClick={resetTimer} className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors">
+                                    <RotateCcw size={14} /> Reset
+                                </button>
+                            )}
+                            {timerStatus === 'finished' && (
+                                <div className="flex gap-2">
+                                    <button onClick={stopAlarm} className="px-3 py-1.5 bg-white border border-red-200 text-red-600 rounded-lg text-xs font-bold hover:bg-red-50">Stop Suara</button>
+                                    <button onClick={resetTimer} className="px-3 py-1.5 bg-slate-800 text-white rounded-lg text-xs font-bold hover:bg-slate-700"><RotateCcw size={14} /></button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Form Body */}
                     <div className="p-5 flex-1 space-y-4">
                         <div onClick={() => updateTaskDirectly(task.id, 'isCompleted', !task.isCompleted)} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer select-none transition-all ${task.isCompleted ? 'bg-green-50 border-green-200 text-green-700' : 'bg-white border-slate-200 text-slate-500 hover:border-blue-300 hover:bg-slate-50'}`}>
                             <div className={`transform transition-transform ${task.isCompleted ? 'scale-110' : ''}`}>{task.isCompleted ? <CheckSquare size={24} className="text-green-600" /> : <Square size={24} className="text-slate-300" />}</div>
@@ -196,11 +312,7 @@
 
             useEffect(() => {
                 if (!user) return;
-                // PERUBAHAN UTAMA DI SINI:
-                // Menggunakan koleksi 'shared_capcut_tasks' alih-alih 'users/{uid}/tasks'
-                // Ini membuat semua user membaca/menulis ke tempat yang sama
                 const q = query(collection(db, SHARED_COLLECTION), orderBy('createdAt', 'asc'));
-                
                 const unsub = onSnapshot(q, (snap) => {
                     const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                     setTasks(data);
@@ -219,9 +331,8 @@
                 if (!user) return;
                 setSaveStatus("saving");
                 try {
-                    // Simpan ke SHARED_COLLECTION
                     await addDoc(collection(db, SHARED_COLLECTION), {
-                        account: "", password: "masuk123", link: "", variant: "35 DAY", gsuit: "", isCompleted: false, createdAt: serverTimestamp()
+                        account: "", password: "masuk123", link: "", variant: "35 DAY", gsuit: "", isCompleted: false, createdAt: serverTimestamp(), timerEnd: null
                     });
                     setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }), 500);
                 } catch(e) { 
@@ -257,11 +368,11 @@
                                         <LayoutDashboard className="text-white" size={22} />
                                     </div>
                                     <div>
-                                        <h1 className="text-xl font-bold text-slate-800 leading-none">Capcut Task Manager</h1>
+                                        <h1 className="text-xl font-bold text-slate-800 leading-none">Capcut Manager</h1>
                                         <div className="flex items-center gap-1.5 mt-1">
                                             {saveStatus === "saving" ? <><Loader2 size={10} className="text-blue-500 animate-spin" /><span className="text-[10px] text-blue-500">Syncing...</span></> 
                                             : saveStatus === "saved" ? <><Cloud size={10} className="text-green-500" /><span className="text-[10px] text-green-600">Saved</span></>
-                                            : <><Cloud size={10} className="text-slate-400" /><span className="text-[10px] text-slate-400">Live Sync By AurigoStore</span></>}
+                                            : <><Cloud size={10} className="text-slate-400" /><span className="text-[10px] text-slate-400">Live Sync</span></>}
                                         </div>
                                     </div>
                                 </div>
